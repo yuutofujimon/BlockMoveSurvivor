@@ -14,6 +14,11 @@ public class Explode : MonoBehaviour
     private GameObject _explotionEffectPrefab;
 
     /// <summary>
+    /// 爆発制御フラグ
+    /// </summary>
+    private bool _isExploded = false;
+
+    /// <summary>
     /// ゲームマネージャー
     /// </summary>
     private GameManager _gameManager;
@@ -26,8 +31,8 @@ public class Explode : MonoBehaviour
         // ゲームオブジェクト名で取得
         _gameManager = GameObject.Find("GameManager").GetComponent<GameManager>();
 
-        // 2秒後に爆発
-        Invoke(nameof(Explotion), 2f);
+        // 3秒後に爆発
+        Invoke(nameof(Explotion), 3f);
     }
 
     /// <summary>
@@ -35,6 +40,9 @@ public class Explode : MonoBehaviour
     /// </summary>
     void Explotion()
     {
+        if (_isExploded) return; // ★二重呼び出し防止
+        _isExploded = true;
+
         // 中心の爆発
         CreateExplosion(transform.position);
 
@@ -43,6 +51,16 @@ public class Explode : MonoBehaviour
         SpreadExplosion(Vector3.back);    // ↓
         SpreadExplosion(Vector3.left);    // ←
         SpreadExplosion(Vector3.right);   // →
+
+        // ❗ 爆弾削除はここで1回だけ実行する
+        Destroy(gameObject);
+
+        // 爆弾位置を削除
+        var pos2D = new Vector2Int(
+            Mathf.RoundToInt(transform.position.x / TileSize),
+            Mathf.RoundToInt(transform.position.z / TileSize)
+        );
+        _gameManager.RemoveBombAtPosition(pos2D);
     }
 
     /// <summary>
@@ -55,35 +73,64 @@ public class Explode : MonoBehaviour
 
         for (var i = 1; i <= 3; i++)
         {
+            // 爆発が届くタイル座標
             var targetPos = centerPos + direction * (TileSize * i);
 
-            // そのマスに Ray を撃つ
-            if (Physics.Raycast(centerPos + direction * (TileSize * (i - 1) + 0.1f),
-                                direction,
-                                out RaycastHit hit,
-                                TileSize
-                                )
-                )
+            // ================================
+            // このタイル位置にあるオブジェクトを取得
+            // ================================
+            Collider[] hits = Physics.OverlapSphere(targetPos, 0.5f);
+
+            bool blocked = false;
+
+            foreach (var hit in hits)
             {
-                // 壊せない壁ならここで止める（手前まで爆発）
-                if (hit.collider.CompareTag("StageWall"))
+                if (hit == null) continue;
+
+                // 壊せない壁
+                if (hit.CompareTag("DontBreakWall"))
                 {
+                    // 手前の位置まで爆発
                     CreateExplosion(centerPos + direction * (TileSize * (i - 1)));
+                    blocked = true;
                     break;
                 }
 
                 // 壊れるブロック
-                if (hit.collider != null && hit.collider.CompareTag("Cube"))
+                if (hit.CompareTag("AbleBreakWall"))
                 {
-                    CreateExplosion(hit.collider.transform.position);
-
-                    Destroy(hit.collider.gameObject);
-
+                    CreateExplosion(hit.transform.position);
+                    Destroy(hit.gameObject);
+                    blocked = true;
                     break;
+                }
+
+                // 💣 別の爆弾 → 連鎖爆発
+                if (hit.CompareTag("Bomb"))
+                {
+                    var bomb = hit.GetComponent<Explode>();
+
+                    if (bomb != null)
+                    {
+                        bomb.CancelInvoke();   // タイマー停止
+                        bomb.Explotion();      // 即時爆発！
+                    }
+
+                    blocked = true;
+                    break;
+                }
+
+                if (hit.CompareTag("Player"))
+                {
+
                 }
             }
 
-            // 何もなければ通常爆発
+            // 壁やブロックで止まった
+            if (blocked)
+                break;
+
+            // 何にも当たらなければ通常爆発
             CreateExplosion(targetPos);
         }
     }
@@ -94,16 +141,7 @@ public class Explode : MonoBehaviour
     /// <param name="position"> 位置 </param>
     void CreateExplosion(Vector3 position)
     {
-        Instantiate(_explotionEffectPrefab, position, Quaternion.identity);
-
-        // ボム破壊
-        Destroy(gameObject);
-
-        // Vector3をVector2Intに変換して爆弾情報を削除
-        var pos2D = new Vector2Int(
-            Mathf.RoundToInt(position.x / TileSize),
-            Mathf.RoundToInt(position.z / TileSize)
-        );
-        _gameManager.RemoveBombAtPosition(pos2D);
+       var effect =  Instantiate(_explotionEffectPrefab, position, Quaternion.identity);
+        Destroy(effect, 1f);  // 1秒後に消える
     }
 }

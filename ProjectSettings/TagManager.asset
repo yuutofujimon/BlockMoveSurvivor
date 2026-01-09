@@ -4,9 +4,11 @@
 TagManager:
   serializedVersion: 2
   tags:
-  - Cube
-  - StageWall
   - Enemy
+  - Bomb
+  - AbleBreakWall
+  - DontBreakWall
+  - Ground
   layers:
   - Default
   - TransparentFX

@@ -35,7 +35,7 @@ public class NavWalk : MonoBehaviour
         }
 
         // エージェントが現在設定された目標地点に行くように設定します
-        _agent.destination = Points[destPoint_].position;
+        _agent.destination = new Vector3(Points[destPoint_].position.x, _agent.destination.y, Points[destPoint_].position.z);
 
         // 配列内の次の位置を目標地点に設定し、
         // 必要ならば出発地点にもどります
